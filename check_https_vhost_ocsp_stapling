@@ -1,0 +1,67 @@
+#!/bin/bash
+OK=0
+WARN=1
+CRITICAL=2
+
+TIMEOUT="/usr/bin/timeout"
+OPENSSL="/usr/bin/openssl"
+
+function printUsage() {
+    echo "Usage: $0 --host <ip-address|hostname> --vhosts www.domain1.com,www.domain2.com,... [--port 443]"
+}
+
+if [ ! -x "$OPENSSL" ]; then
+  echo "CRITICAL: Missing $OPENSSL"
+  exit $CRITICAL
+fi
+
+
+PORT=443
+DAYS=30
+while [ $# -gt 0 ]; do
+  if [ "$1" == "--help" ]; then
+    shift
+    printUsage
+    exit $OK
+  elif [ "$1" == "--host" ]; then
+    shift
+    HOST="$1"
+    shift
+  elif [ "$1" == "--vhosts" ]; then
+    shift
+    VHOSTS="$1"
+    shift
+  elif [ "$1" == "--port" ]; then
+    shift
+    PORT="$1"
+    shift
+  else
+    printUsage
+    echo "Unknown parameter: $1"
+    exit $CRITICAL
+  fi
+done
+
+[ -z "$HOST" ] && printUsage && echo "Missing --host parameter" && exit $CRITICAL
+[ -z "$VHOSTS" ] && printUsage && echo "Missing --vhosts parameter" && exit $CRITICAL
+
+OLD_IFS="$IFS"
+IFS=","
+EXIT_CODE=$OK
+MESSAGE=""
+for VHOST in $VHOSTS; do
+  COUNT=$("$TIMEOUT" 2s "$OPENSSL" s_client -connect "$HOST":"$PORT" -servername "$VHOST" -tls1 -status </dev/null 2>&1 | grep "OCSP Response Status: successful" | wc -l; exit ${PIPESTATUS[0]})
+  PLUGIN_STATUS=$?
+  OUTPUT="OK"
+  if [ $PLUGIN_STATUS -eq 0 ]; then
+    [ "$COUNT" == 0 ] && EXIT_CODE="$WARN" && OUTPUT="MISSING"
+  else
+    EXIT_CODE="$WARN"
+    OUTPUT="TIMEOUT"
+  fi
+  [ -n "$MESSAGE" ] && MESSAGE="$MESSAGE :: "
+  MESSAGE="${MESSAGE}$VHOST ($OUTPUT)"
+done
+IFS="$OLD_IFS"
+echo "$MESSAGE"
+exit $EXIT_CODE
