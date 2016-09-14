@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Check MD RAIDS using /sys filesystem.
+# See https://www.kernel.org/doc/Documentation/md.txt
+
+CAT="/bin/cat"
+BASENAME="/usr/bin/basename"
+SED="/bin/sed"
+
+STATUS_OK=0
+STATUS_WARNING=1
+STATUS_CRITICAL=2
+STATUS_UNKNOWN=3
+
+STATUS=$STATUS_OK
+MSG=""
+
+function add_message() {
+  [ -n "$MSG" ] && MSG="$MSG :: "
+  MSG="$MSG$1"
+}
+function raise_status() {
+  [ $1 -gt $STATUS ] && STATUS=$1
+}
+
+cd /sys/block 2>&1 || exit $STATUS_UNKNOWN
+for MD in md*; do
+  if [ ! -e "$MD" ]; then
+    # md* did not expand, i.e. no arrays defined
+	add_message "No MD arrays defined!"
+	raise_status $STATUS_UNKNOWN
+	break;
+  fi
+  MD_LEVEL="$($CAT $MD/md/level)"
+  MD_STATUS="$($CAT $MD/md/array_state)"
+  MD_SYNC_STATUS="$($CAT $MD/md/sync_action)"
+  MD_DEGRADED="$($CAT $MD/md/degraded)"
+  MD_SUMMARY=""
+  if [ "$MD_DEGRADED" != "0" ]; then
+    MD_STATUS="degraded=$MD_DEGRADED"
+	raise_status $STATUS_CRITICAL
+	MD_SUMMARY="CRITICAL"
+  fi
+  if [ "$MD_STATUS" != "clean" -a "$MD_STATUS" != active -a "$MD_STATUS" != active-idle -a "$MD_STATUS" != "write-pending" ]; then
+    raise_status $STATUS_CRITICAL
+	[ -z "MD_SUMMARY" ] && MD_SUMMARY="CRITICAL"
+  fi
+  if [ "$MD_SYNC_STATUS" != "idle" ]; then
+    MD_STATUS="$MD_STATUS,$MD_SYNC_STATUS"
+	raise_status $STATUS_WARNING
+	[ -z "MD_SUMMARY" ] && MD_SUMMARY="WARNING"
+  fi
+
+  for DEV in $MD/md/dev-*; do
+    DEV_NAME="$($BASENAME "$DEV")"
+	DEV_STATE="$($CAT $DEV/state)"
+	MD_STATUS="$MD_STATUS,$DEV_NAME=$DEV_STATE"
+	DEV_STATE="$(echo "$DEV_STATE" | $SED 's/,*write_*mostly//g')"
+	if [ "$DEV_STATE" != "in_sync" -a "$DEV_STATE" != "spare" ]; then
+	  raise_status $STATUS_CRITICAL
+	  MD_SUMMARY="CRITICAL"
+	fi
+  done
+
+
+  [ -z "$MD_SUMMARY" ] && MD_SUMMARY="OK"
+  add_message "$MD $MD_SUMMARY ($MD_LEVEL,$MD_STATUS)"
+done
+
+echo "$MSG" 
+exit $STATUS
