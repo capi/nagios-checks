@@ -48,7 +48,7 @@ for MD in md*; do
   if [ "$MD_SYNC_STATUS" != "idle" ]; then
     MD_STATUS="$MD_STATUS,$MD_SYNC_STATUS"
 	raise_status $STATUS_WARNING
-	[ -z "MD_SUMMARY" ] && MD_SUMMARY="WARNING"
+	[ -z "$MD_SUMMARY" ] && MD_SUMMARY="WARNING"
   fi
 
   for DEV in $MD/md/dev-*; do
