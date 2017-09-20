@@ -32,6 +32,10 @@ for MD in md*; do
 	break;
   fi
   MD_LEVEL="$($CAT $MD/md/level)"
+  if [ -z "$MD_LEVEL" ]; then
+    # the device is present in the kernel, but not actuall active
+    continue
+  fi
   MD_STATUS="$($CAT $MD/md/array_state)"
   MD_SYNC_STATUS="$($CAT $MD/md/sync_action)"
   MD_DEGRADED="$($CAT $MD/md/degraded)"
