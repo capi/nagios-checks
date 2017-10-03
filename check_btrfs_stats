@@ -1,0 +1,23 @@
+#!/bin/bash
+
+BTRFS="/bin/btrfs"
+
+VOLUME="$1"
+if [ -z "$VOLUME" ]; then
+  echo "Usage: $0 <btfs-mount-point>"
+  exit 2
+fi
+ERROR_COUNT=$("$BTRFS" device stats "$VOLUME" | egrep -v ' 0$' | wc -l; exit ${PIPESTATUS[0]})
+EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 0 ]; then
+  echo "CRITICAL: BTRFS device stats failed with exit-code=$EXIT_CODE"
+  exit 2
+fi
+if [ "$ERROR_COUNT" -eq 0 ]; then
+  echo "OK: No Errors found."
+  exit 0
+else
+  echo "CRITICAL: Errors found on $VOLUME"
+  exit 2
+fi
+exit 2
