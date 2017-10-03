@@ -1,0 +1,37 @@
+#!/bin/bash
+
+MESSAGE=""
+
+addMessage() {
+  if [ -n "$1" ]; then
+    if [ -n "$MESSAGE" ]; then
+	  MESSAGE="$MESSAGE ::"
+	fi
+	MESSAGE="$MESSAGE $1"
+  fi
+  return 0
+}
+
+EXIT=0
+for MD_DIR in $(ls -d /sys/block/md*); do
+  MD="$(basename "$MD_DIR")"
+  LEVEL="$(cat /sys/block/$MD/md/level)"
+  if [ -z "$LEVEL" ]; then
+    # device still exists in kernel, but is no longer active
+    continue
+  fi
+  MISMATCH=$(cat /sys/block/$MD/md/mismatch_cnt)
+  if [ -z "$MISMATCH" ]; then
+    addMessage "$MD: CRITICAL (could not read status file)"
+    EXIT=2
+  fi
+  if [ "$MISMATCH" -eq 0 ]; then
+    addMessage "$MD: OK"
+  else
+    addMessage "$MD: CRITICAL ($MISMATCH)"
+    EXIT=2
+  fi
+done
+
+echo $MESSAGE
+exit $EXIT
