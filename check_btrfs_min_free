@@ -1,0 +1,28 @@
+#!/bin/bash
+
+FS=""
+MIN_FREE_CRITICAL=1024000000
+MIN_FREE_WARNING=10240000000
+
+BTRFS="/bin/btrfs"
+
+while [ $# -gt 0 ]; do
+  [ "$1" == "--volume" ] && shift && FS="$1" && shift && continue
+  [ "$1" == "--warn" ] && shift && MIN_FREE_WARNING="$1" && shift && continue
+  [ "$1" == "--critical" ] && shift && MIN_FREE_CRITICAL="$1" && shift && continue
+  echo "CRITICAL: Unknown option: $1"
+  exit 2
+done
+
+[ -z "$FS" -o ! -e "$FS" ] && echo "No such directory: $FS" && exit 2
+
+MIN_FREE=$("$BTRFS" filesystem usage "$FS" --raw | grep "Free (estimated)" | egrep -o "min: [0-9]*" | egrep -o "[0-9]*")
+if [ -n "$MIN_FREE" ]; then
+  [ "$MIN_FREE" -lt "$MIN_FREE_CRITICAL" ] && echo "CRITICAL: Minimum free space is $MIN_FREE bytes | min_free_bytes=$MIN_FREE" && exit 2
+  [ "$MIN_FREE" -lt "$MIN_FREE_WARNING" ] && echo "WARNING: Minimum free space is $MIN_FREE bytes | min_free_bytes=$MIN_FREE" && exit 1
+  echo "OK: Minimum free space is $MIN_FREE bytes | min_free_bytes=$MIN_FREE"
+  exit 0
+else
+  echo "CRITICAL: Cannot determine minimum free disk space of $FS"
+  exit 2
+fi
