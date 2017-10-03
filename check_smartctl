@@ -1,0 +1,27 @@
+#!/bin/bash
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <device>"
+  exit 3
+fi
+if [ ! -e "$1" ]; then
+  echo "UNKNOWN: No such device."
+  exit 3
+fi 
+
+smartctl -H "$1" | grep "SMART overall-health self-assessment test result:" | tail -n 1; 
+SMARTCTL_RESULT=${PIPESTATUS[0]}
+if [ "$SMARTCTL_RESULT" -eq 4 ]; then
+  # USB device do not support -H option, but only attribute checks
+  ERRORS="$(smartctl -a "$1" -q errorsonly)"
+  if [ -z "$ERRORS" ]; then
+    SMARTCTL_RESULT=0
+  else
+    echo "$ERRORS"
+  fi
+fi
+
+if [ "$SMARTCTL_RESULT" -eq  0 ]; then
+  exit 0
+else
+  exit 2
+fi
