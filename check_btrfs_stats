@@ -14,7 +14,7 @@ if [ "$EXIT_CODE" -ne 0 ]; then
   exit 2
 fi
 if [ "$ERROR_COUNT" -eq 0 ]; then
-  echo "OK: No Errors found."
+  echo "OK: No errors found."
   exit 0
 else
   echo "CRITICAL: Errors found on $VOLUME"
