@@ -11,11 +11,12 @@ done
 [ -z "$FS" -o ! -e "$FS" ] && echo "No such directory: $FS" && exit 2
 
 RAW="$("$BTRFS" scrub status -R "$FS")"
-RAW_NON_STATS="$("$BTRFS" scrub status "$FS")"
 if [ $? -ne 0 ]; then
   echo "CRITICAL: Cannot get scrub status of $FS"
   exit 2
 fi
+RAW_NON_STATS="$("$BTRFS" scrub status "$FS")"
+SUMMARY_LINE=$(echo "$RAW_NON_STATS" | grep -v "UUID:" | sed 's/[ ][ ]*/ /g' | tr '\n' ',' | sed 's/,/, /g')
 
 if ! egrep -q "Status:.*(started|resumed|finished|running|aborted)" <<<"$RAW"; then
   echo "CRITICAL: Filesystem has never been scrubbed."
@@ -35,16 +36,16 @@ if egrep -q "Status: *finished" <<<"$RAW"; then
   END="$(date -d "$START + $(echo "$DURATION" | sed 's/\([^:]*\):\(..\):\(..\)/\1 hours + \2 minutes + \3 seconds/')")"
   AGE=$(( $(date +%s) - $(date -d "$END" +%s)  ))
   if [ -z "$START" -o -z "$END" -o -z "$AGE" ]; then
-    echo "WARNING: CANNOT DETERMINE AGE OF SCRUB: Last scrub finished without finding errors."
+    echo "WARNING: CANNOT DETERMINE AGE OF SCRUB:" $SUMMARY_LINE
     exit 1
   fi
   if [ -n "$AGE_WARNING" ] && [ "$AGE_WARNING" -lt "$AGE" ]; then
     echo "WARNING: SCRUB TOO OLD: Scrub finished $AGE seconds ago without finding errors."
     exit 1
   fi
-  echo "OK: Scrub finished $AGE seconds ago without finding errors:" $(egrep "Error summary:" <<<"$RAW_NON_STATS")
+  echo "OK: Scrub finished $AGE seconds ago without finding errors:" $SUMMARY_LINE
   exit 0
 fi
 
-echo WARNING: $(egrep "Status:" <<<"$RAW"), $(egrep "Error summary:" <<<"$RAW_NON_STATS")
+echo WARNING: $SUMMARY_LINE
 exit 1
