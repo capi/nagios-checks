@@ -1,0 +1,50 @@
+#!/bin/bash
+BTRFS="/bin/btrfs"
+AGE_WARNING=""
+while [ $# -gt 0 ]; do
+  [ "$1" == "--volume" ] && shift && FS="$1" && shift && continue
+  [ "$1" == "--age-warning" ] && shift && AGE_WARNING="$1" && shift && continue
+  echo "CRITICAL: Unknown option: $1"
+  exit 2
+done
+
+[ -z "$FS" -o ! -e "$FS" ] && echo "No such directory: $FS" && exit 2
+
+RAW="$("$BTRFS" scrub status -R "$FS")"
+RAW_NON_STATS="$("$BTRFS" scrub status "$FS")"
+if [ $? -ne 0 ]; then
+  echo "CRITICAL: Cannot get scrub status of $FS"
+  exit 2
+fi
+
+if ! egrep -q "Status:.*(started|resumed|finished|running|aborted)" <<<"$RAW"; then
+  echo "CRITICAL: Filesystem has never been scrubbed."
+  exit 2
+fi
+
+ERRORS="$(echo "$RAW" | egrep '_errors' | egrep -v ' 0$')"
+if [ -n "$ERRORS" ]; then
+  echo "CRITICAL: Scrub errors found:" $ERRORS
+  exit 2
+fi
+
+if egrep -q "Status: *finished" <<<"$RAW"; then
+  # scrub started at Sat Oct 14 00:10:00 2017 and finished after 08:57:46
+  DURATION="$(echo "$RAW" | egrep -o 'Duration: *..:..:..$' | sed 's/Duration: *//g')";
+  START="$(echo "$RAW" | egrep -o "Scrub started: *... ... .. ..:..:.. ...." | sed 's/Scrub started: *...//g')"
+  END="$(date -d "$START + $(echo "$DURATION" | sed 's/\([^:]*\):\(..\):\(..\)/\1 hours + \2 minutes + \3 seconds/')")"
+  AGE=$(( $(date +%s) - $(date -d "$END" +%s)  ))
+  if [ -z "$START" -o -z "$END" -o -z "$AGE" ]; then
+    echo "WARNING: CANNOT DETERMINE AGE OF SCRUB: Last scrub finished without finding errors."
+    exit 1
+  fi
+  if [ -n "$AGE_WARNING" ] && [ "$AGE_WARNING" -lt "$AGE" ]; then
+    echo "WARNING: SCRUB TOO OLD: Scrub finished $AGE seconds ago without finding errors."
+    exit 1
+  fi
+  echo "OK: Scrub finished $AGE seconds ago without finding errors:" $(egrep "Error summary:" <<<"$RAW_NON_STATS")
+  exit 0
+fi
+
+echo WARNING: $(egrep "Status:" <<<"$RAW"), $(egrep "Error summary:" <<<"$RAW_NON_STATS")
+exit 1
