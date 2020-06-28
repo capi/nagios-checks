@@ -32,7 +32,7 @@ fi
 if egrep -q "Status: *finished" <<<"$RAW"; then
   # scrub started at Sat Oct 14 00:10:00 2017 and finished after 08:57:46
   DURATION="$(echo "$RAW" | egrep -o 'Duration: *..:..:..$' | sed 's/Duration: *//g')";
-  START="$(echo "$RAW" | egrep -o "Scrub started: *... ... .. ..:..:.. ...." | sed 's/Scrub started: *...//g')"
+  START="$(echo "$RAW" | egrep -o "Scrub (started|resumed): *... ... .. ..:..:.. ...." | sed 's/Scrub [^:]*://g')"
   END="$(date -d "$START + $(echo "$DURATION" | sed 's/\([^:]*\):\(..\):\(..\)/\1 hours + \2 minutes + \3 seconds/')")"
   AGE=$(( $(date +%s) - $(date -d "$END" +%s)  ))
   if [ -z "$START" -o -z "$END" -o -z "$AGE" ]; then
