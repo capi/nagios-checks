@@ -7,7 +7,7 @@ if [ -z "$VOLUME" ]; then
   echo "Usage: $0 <btfs-mount-point>"
   exit 2
 fi
-ERROR_COUNT=$("$BTRFS" device stats "$VOLUME" | egrep -v ' 0$' | wc -l; exit ${PIPESTATUS[0]})
+ERROR_COUNT=$("$BTRFS" device stats "$VOLUME" | egrep '[0-9]$' | egrep -v ' 0$' | wc -l; exit ${PIPESTATUS[0]})
 EXIT_CODE=$?
 if [ "$EXIT_CODE" -ne 0 ]; then
   echo "CRITICAL: BTRFS device stats failed with exit-code=$EXIT_CODE"
